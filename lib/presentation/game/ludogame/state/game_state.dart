@@ -13,7 +13,7 @@ class GameState {
 
   List<int> diceChances =
       List.filled(3, 0, growable: false); // Track consecutive 6s
-  var diceNumber = 5;
+  var diceNumber = 1;
   
   // Seed counting for game verification
   Map<String, int> playerSeedCounts = {};
@@ -136,7 +136,7 @@ class GameState {
   Future<void> clearPlayers() async {
     players.clear();
     currentPlayerIndex = 0;
-    diceNumber = 5;
+    diceNumber = 1;
     resetTokenMovement();
     resetSeedCounts();
     return Future.value();

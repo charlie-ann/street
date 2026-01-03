@@ -546,6 +546,10 @@ void moveOutOfBase({
       MoveToEffect(SpotManager().findSpotById(tokenPath.first).tokenPosition,
           EffectController(duration: 0.1, curve: Curves.easeInOut)));
 
+  // Award 6 points for moving from base to the token's owner
+  final tokenOwner = GameState().players.firstWhere((p) => p.tokens.contains(token));
+  GameState().addScore(tokenOwner.playerId, 6);
+
   tokenCollision(world, token);
 }
 
@@ -569,6 +573,23 @@ void tokenCollision(World world, Token attackerToken) async {
 
     if (tokensToMove.isNotEmpty) {
       wasTokenAttacked = true;
+      // Award 50 points for each token sent back to base
+      final attackerOwner = GameState().players.firstWhere((p) => p.tokens.contains(attackerToken));
+      GameState().addScore(attackerOwner.playerId, tokensToMove.length * 50);
+      
+      // Subtract points from killed tokens based on their board position
+      for (var killedToken in tokensToMove) {
+        String tokenColorId = killedToken.tokenId.substring(0, 2);
+        String pathId = tokenColorId.replaceFirst('T', 'P');
+        final tokenPath = GameState().getTokenPath(pathId);
+        final currentIndex = tokenPath.indexOf(killedToken.positionId);
+        
+        // Subtract points equal to steps taken on board
+        if (currentIndex > 0) {
+          final killedTokenOwner = GameState().players.firstWhere((p) => p.tokens.contains(killedToken));
+          GameState().subtractScore(killedTokenOwner.playerId, currentIndex);
+        }
+      }
     }
 
     // Wait for all movements to complete
@@ -585,18 +606,17 @@ void tokenCollision(World world, Token attackerToken) async {
       .players
       .firstWhere((player) => player.playerId == attackerToken.playerId);
 
-  if (wasTokenAttacked) {
+
+
+  if (wasTokenAttacked || GameState().diceNumber == 6) {
     if (player.hasRolledThreeConsecutiveSixes()) {
       player.resetExtraTurns();
     }
     player.grantAnotherTurn();
+    player.enableDice = true;
   } else {
-    if (GameState().diceNumber != 6) {
-      GameState().switchToNextPlayer();
-    }
+    GameState().switchToNextPlayer();
   }
-
-  player.enableDice = true;
 
   if (GameState().diceNumber == 6 || wasTokenAttacked == true) {
     final lowerController = world.children.whereType<LowerController>().first;
@@ -764,6 +784,10 @@ Future<void> moveForward({
     // Add a small delay to reduce CPU strain and smooth the animation
     Future.delayed(const Duration(milliseconds: 120));
   }
+  
+  // Add points for steps moved - award to token's owner
+  final tokenOwner = GameState().players.firstWhere((p) => p.tokens.contains(token));
+  GameState().addScore(tokenOwner.playerId, diceNumber);
 
   // if token is in home
   bool isTokenInHome = await checkTokenInHomeAndHandle(token, world);
@@ -811,10 +835,10 @@ Future<void> moveTokenToBase({
     token,
     MoveToEffect(
       SpotManager().findSpotById(token.positionId).position,
-      EffectController(duration: 0.03, curve: Curves.easeInOut),
+      EffectController(duration: 0.01, curve: Curves.easeInOut),
     ),
   );
-  Future.delayed(const Duration(milliseconds: 30));
+  Future.delayed(const Duration(milliseconds: 10));
 }
 
 Future<bool> checkTokenInHomeAndHandle(Token token, World world) async {
@@ -826,8 +850,11 @@ Future<bool> checkTokenInHomeAndHandle(Token token, World world) async {
 
   token.state = TokenState.inHome;
 
+  // Add 50 points for reaching home to token's owner
+  final tokenOwner = GameState().players.firstWhere((p) => p.tokens.contains(token));
+  GameState().addScore(tokenOwner.playerId, 50);
+
   // Cache players from GameState
-  // final players = GameState().players;
   final player =
       GameState().players.firstWhere((p) => p.playerId == token.playerId);
   player.updateTokensInHomeCount();
@@ -835,6 +862,9 @@ Future<bool> checkTokenInHomeAndHandle(Token token, World world) async {
   // Handle win condition
   if (player.totalTokensInHome == 4) {
     player.hasWon = true;
+    // Award bonus points for winning
+    final tokenOwner = GameState().players.firstWhere((p) => p.tokens.contains(token));
+    GameState().addScore(tokenOwner.playerId, 100);
 
     // Get winners and non-winners
     final playersWhoWon = GameState().players.where((p) => p.hasWon).toList();
@@ -862,7 +892,6 @@ Future<bool> checkTokenInHomeAndHandle(Token token, World world) async {
   }
 
   // Grant another turn if not all tokens are home
-
   player.enableDice = true;
   final lowerController = world.children.whereType<LowerController>().first;
   lowerController.showPointer(player.playerId);

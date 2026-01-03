@@ -4,15 +4,15 @@ import 'package:flame/effects.dart';
 import '../../ludo.dart';
 import '../../state/game_state.dart';
 import '../../component/ui_components/dice_pointer.dart';
-import '../ui_components/turn_timer.dart';
+import '../ui_components/score_display.dart';
 // user files
 import 'controller_block.dart';
 
 class UpperController extends RectangleComponent with HasGameReference<Ludo> {
   final RectangleComponent leftArrow;
   final RectangleComponent rightArrow;
-  late TurnTimer _redTimer;
-  late TurnTimer _greenTimer;
+  late ScoreDisplay _player1Score;
+  late ScoreDisplay _player2Score;
 
   UpperController({
     required double width,
@@ -109,10 +109,10 @@ class UpperController extends RectangleComponent with HasGameReference<Ludo> {
 
     addAll([leftDice, leftToken, rightDice, rightToken, leftArrow, rightArrow]);
 
-    // Initialize timers
-    _redTimer = TurnTimer(playerId: 'RP', position: Vector2(innerWidth * 0.2, innerHeight * 0.1));
-    _greenTimer = TurnTimer(playerId: 'GP', position: Vector2(width - innerWidth * 0.6, innerHeight * 0.1));
-    addAll([_redTimer, _greenTimer]);
+    // Initialize score displays for both players
+    _player1Score = ScoreDisplay(playerId: 'BP', position: Vector2(innerWidth * 0.2, innerHeight * 0.1));
+    _player2Score = ScoreDisplay(playerId: 'GP', position: Vector2(width - innerWidth * 0.6, innerHeight * 0.1));
+    addAll([_player1Score, _player2Score]);
 
     // Set the position of the UpperController
     this.position = position ??
@@ -123,15 +123,6 @@ class UpperController extends RectangleComponent with HasGameReference<Ludo> {
   void showPointer(String playerId) {
     final pointerX = size.x * 0.05;
     final pointerY = (size.x * 0.20) * 0.2;
-
-    // Start timer for current player automatically
-    if (playerId == 'RP' || playerId == 'BP') {
-      _redTimer.startTimer();
-      _greenTimer.stopTimer();
-    } else if (playerId == 'GP' || playerId == 'YP') {
-      _greenTimer.startTimer();
-      _redTimer.stopTimer();
-    }
 
     if (playerId == 'RP') {
       final leftPointer = DicePointer(

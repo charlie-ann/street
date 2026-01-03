@@ -86,6 +86,11 @@ class LudoDice extends PositionComponent with TapCallbacks {
   void _showHouseColorSelection(World world, LudoBoard ludoBoard, int diceNumber) {
     String currentPlayerId = GameState().currentPlayer.playerId;
     
+    // Re-enable dice for another roll when 6 is rolled
+    if (diceNumber == 6) {
+      player.enableDice = true;
+    }
+    
     // Enable movement flags based on dice number
     if (diceNumber == 6) {
       GameState().enableMoveFromBoth();
