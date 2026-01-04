@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flame/components.dart';
-import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flame/effects.dart';
 import 'package:flame/input.dart';
@@ -512,6 +511,8 @@ class Ludo extends FlameGame
       position: Vector2(size.x * 0.05, size.y * 0.10),
       size: Vector2(size.x * 0.90, size.y * 0.90),
       context: context,
+      roomId: roomId,
+      gameName: gameName,
     );
     world.add(_playerModal!);
   }
@@ -562,13 +563,29 @@ void tokenCollision(World world, Token attackerToken) async {
   // Initialize the flag to track if any token was attacked
   bool wasTokenAttacked = false;
 
+  // Helper function to check if two tokens belong to the same actual player
+  bool belongToSamePlayer(Token token1, Token token2) {
+    // Player 1 controls BP and RP houses
+    // Player 2 controls GP and YP houses
+    final player1Houses = ['BP', 'RP'];
+    final player2Houses = ['GP', 'YP'];
+    
+    if (player1Houses.contains(token1.playerId) && player1Houses.contains(token2.playerId)) {
+      return true;
+    }
+    if (player2Houses.contains(token1.playerId) && player2Houses.contains(token2.playerId)) {
+      return true;
+    }
+    return token1.playerId == token2.playerId;
+  }
+
   // only attacker token on spot, return
   if (tokensOnSpot.length > 1 &&
       !['B04', 'B23', 'R22', 'R10', 'G02', 'G21', 'Y30', 'Y42']
           .contains(attackerToken.positionId)) {
-    // Batch token movements
+    // Batch token movements - only move tokens that don't belong to the same actual player
     final tokensToMove = tokensOnSpot
-        .where((token) => token.playerId != attackerToken.playerId)
+        .where((token) => !belongToSamePlayer(token, attackerToken))
         .toList();
 
     if (tokensToMove.isNotEmpty) {
@@ -593,12 +610,39 @@ void tokenCollision(World world, Token attackerToken) async {
     }
 
     // Wait for all movements to complete
-    await Future.wait(tokensToMove.map((token) => moveBackward(
-          world: world,
-          token: token,
-          tokenPath: GameState().getTokenPath(token.playerId),
-          ludoBoard: GameState().ludoBoard as PositionComponent,
-        )));
+    await Future.wait(tokensToMove.map((token) {
+      String tokenColorId = token.tokenId.substring(0, 2);
+      String pathId = tokenColorId.replaceFirst('T', 'P');
+      return moveBackward(
+        world: world,
+        token: token,
+        tokenPath: GameState().getTokenPath(pathId),
+        ludoBoard: GameState().ludoBoard as PositionComponent,
+      );
+    }));
+    
+    // Automatically move killer token to home only if it killed enemy tokens
+    if (tokensToMove.isNotEmpty) {
+      String attackerColorId = attackerToken.tokenId.substring(0, 2);
+      String attackerPathId = attackerColorId.replaceFirst('T', 'P');
+      final attackerPath = GameState().getTokenPath(attackerPathId);
+      final homePosition = attackerPath.last; // Last position is home
+      
+      // Move attacker token directly to home
+      attackerToken.positionId = homePosition;
+      attackerToken.state = TokenState.inHome;
+      await _applyEffect(
+        attackerToken,
+        MoveToEffect(
+          SpotManager().findSpotById(homePosition).tokenPosition,
+          EffectController(duration: 0.5, curve: Curves.easeInOut),
+        ),
+      );
+      
+      // Award 50 points for reaching home
+      final attackerOwner = GameState().players.firstWhere((p) => p.tokens.contains(attackerToken));
+      GameState().addScore(attackerOwner.playerId, 50);
+    }
   }
 
   // Grant another turn or switch to next player
@@ -697,14 +741,19 @@ Future<void> moveBackward({
   required List<String> tokenPath,
   required PositionComponent ludoBoard,
 }) async {
-  final currentIndex = tokenPath.indexOf(token.positionId);
+  // Get token's own color path, not the passed tokenPath
+  String tokenColorId = token.tokenId.substring(0, 2);
+  String pathId = tokenColorId.replaceFirst('T', 'P');
+  List<String> ownTokenPath = GameState().getTokenPath(pathId);
+  
+  final currentIndex = ownTokenPath.indexOf(token.positionId);
   const finalIndex = 0;
 
   // Preload audio to avoid delays during playback
   bool audioPlayed = false;
 
   for (int i = currentIndex; i >= finalIndex; i--) {
-    token.positionId = tokenPath[i];
+    token.positionId = ownTokenPath[i];
 
     if (!audioPlayed) {
       SoundManager().playMove();
@@ -723,7 +772,8 @@ Future<void> moveBackward({
     );
   }
 
-  if (token.playerId == 'BP') {
+  // Determine token base by token color
+  if (tokenColorId == 'BT') {
     await moveTokenToBase(
       world: world,
       token: token,
@@ -731,7 +781,7 @@ Future<void> moveBackward({
       homeSpotIndex: 6,
       ludoBoard: ludoBoard,
     );
-  } else if (token.playerId == 'GP') {
+  } else if (tokenColorId == 'GT') {
     await moveTokenToBase(
       world: world,
       token: token,
@@ -739,7 +789,7 @@ Future<void> moveBackward({
       homeSpotIndex: 2,
       ludoBoard: ludoBoard,
     );
-  } else if (token.playerId == 'RP') {
+  } else if (tokenColorId == 'RT') {
     await moveTokenToBase(
       world: world,
       token: token,
@@ -747,7 +797,7 @@ Future<void> moveBackward({
       homeSpotIndex: 0,
       ludoBoard: ludoBoard,
     );
-  } else if (token.playerId == 'YP') {
+  } else if (tokenColorId == 'YT') {
     await moveTokenToBase(
       world: world,
       token: token,
@@ -822,7 +872,29 @@ Future<void> moveTokenToBase({
   required int homeSpotIndex,
   required PositionComponent ludoBoard,
 }) async {
-  for (var entry in tokenBase.entries) {
+  // Get the correct token base mapping based on token's actual color
+  String tokenColorId = token.tokenId.substring(0, 2);
+  Map<String, String> correctTokenBase;
+  int correctHomeSpotIndex;
+  
+  if (tokenColorId == 'BT') {
+    correctTokenBase = TokenManager().blueTokensBase;
+    correctHomeSpotIndex = 6;
+  } else if (tokenColorId == 'GT') {
+    correctTokenBase = TokenManager().greenTokensBase;
+    correctHomeSpotIndex = 2;
+  } else if (tokenColorId == 'RT') {
+    correctTokenBase = TokenManager().redTokensBase;
+    correctHomeSpotIndex = 0;
+  } else if (tokenColorId == 'YT') {
+    correctTokenBase = TokenManager().yellowTokensBase;
+    correctHomeSpotIndex = 8;
+  } else {
+    correctTokenBase = tokenBase;
+    correctHomeSpotIndex = homeSpotIndex;
+  }
+  
+  for (var entry in correctTokenBase.entries) {
     var tokenId = entry.key;
     var homePosition = entry.value;
     if (token.tokenId == tokenId) {
@@ -859,23 +931,23 @@ Future<bool> checkTokenInHomeAndHandle(Token token, World world) async {
       GameState().players.firstWhere((p) => p.playerId == token.playerId);
   player.updateTokensInHomeCount();
 
-  // Handle win condition
-  if (player.totalTokensInHome == 4) {
-    player.hasWon = true;
+  // Handle win condition - check if player has all their tokens home
+  final playerOwner = GameState().players.firstWhere((p) => p.tokens.contains(token));
+  final playerTokensInHome = playerOwner.tokens.where((t) => t.state == TokenState.inHome).length;
+  
+  if (playerTokensInHome == playerOwner.tokens.length) {
+    playerOwner.hasWon = true;
     // Award bonus points for winning
-    final tokenOwner = GameState().players.firstWhere((p) => p.tokens.contains(token));
-    GameState().addScore(tokenOwner.playerId, 100);
+    GameState().addScore(playerOwner.playerId, 100);
 
     // Get winners and non-winners
     final playersWhoWon = GameState().players.where((p) => p.hasWon).toList();
-    final playersWhoNotWon =
-        GameState().players.where((p) => !p.hasWon).toList();
+    final playersWhoNotWon = GameState().players.where((p) => !p.hasWon).toList();
 
     // End game condition
     if (playersWhoWon.length == GameState().players.length - 1) {
-      playersWhoNotWon.first.rank =
-          GameState().players.length; // Rank last player
-      player.rank = playersWhoWon.length; // Set rank for current player
+      playersWhoNotWon.first.rank = GameState().players.length;
+      playerOwner.rank = playersWhoWon.length;
       // Disable dice for all players
       for (var p in GameState().players) {
         p.enableDice = false;
@@ -886,7 +958,7 @@ Future<bool> checkTokenInHomeAndHandle(Token token, World world) async {
       EventBus().emit(OpenPlayerModalEvent());
     } else {
       // Set rank for current player
-      player.rank = playersWhoWon.length;
+      playerOwner.rank = playersWhoWon.length;
     }
     return true;
   }

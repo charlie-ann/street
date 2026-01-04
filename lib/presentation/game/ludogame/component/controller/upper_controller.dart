@@ -110,8 +110,8 @@ class UpperController extends RectangleComponent with HasGameReference<Ludo> {
     addAll([leftDice, leftToken, rightDice, rightToken, leftArrow, rightArrow]);
 
     // Initialize score displays for both players
-    _player1Score = ScoreDisplay(playerId: 'BP', position: Vector2(innerWidth * 0.2, innerHeight * 0.1));
-    _player2Score = ScoreDisplay(playerId: 'GP', position: Vector2(width - innerWidth * 0.6, innerHeight * 0.1));
+    _player1Score = ScoreDisplay(playerId: 'BP', position: Vector2(innerWidth * 0.6, innerHeight * 0.5));
+    _player2Score = ScoreDisplay(playerId: 'GP', position: Vector2(width - innerWidth * 0.6, innerHeight * 0.5));
     addAll([_player1Score, _player2Score]);
 
     // Set the position of the UpperController

@@ -8,11 +8,12 @@ class ScoreDisplay extends TextComponent {
   ScoreDisplay({required this.playerId, required Vector2 position}) : super(
     text: '0',
     position: position,
+    anchor: Anchor.center,
     textRenderer: TextPaint(
       style: const TextStyle(
         color: Colors.white,
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
+        fontSize: 24,
+        fontWeight: FontWeight.w900,
       ),
     ),
   );

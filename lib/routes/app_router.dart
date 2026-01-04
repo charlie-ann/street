@@ -93,10 +93,6 @@ final GoRouter appRouter = GoRouter(
                                 style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              Text(
-                                'Score: 0',
-                                style: TextStyle(color: Colors.blue.shade200, fontSize: 10),
-                              ),
                             ],
                           ),
                         ),
@@ -144,10 +140,6 @@ final GoRouter appRouter = GoRouter(
                                 players.length > 1 ? players[1]['username']?.toString() ?? 'Player 2' : 'Player 2',
                                 style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                'Score: 0',
-                                style: TextStyle(color: Colors.green.shade200, fontSize: 10),
                               ),
                             ],
                           ),
